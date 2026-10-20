@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生物育成かるた 読み札プロジェクター表示</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #fffef0;
+      --card-border: #d97706;
+      --text-main: #1e293b;
+      --accent-red: #dc2626;
+      --font-scale: 1;
+    }
+
+    body {
+      font-family: "Hiragino Kaku Gothic ProN", "Meiryo", "BIZ UDPGothic", sans-serif;
+      background-color: var(--bg-color);
+      color: #f8fafc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* 上部ステータスバー */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 24px;
+      background: #020617;
+      border-bottom: 2px solid #334155;
+      font-size: 1.1rem;
+      z-index: 10;
+      transition: opacity 0.3s;
+    }
+
+    .header-title {
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .badge {
+      background: #1e293b;
+      border: 1px solid #475569;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 1rem;
+      font-weight: bold;
+    }
+
+    .badge-highlight {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    .badge-pin {
+      background: #ca8a04;
+      border-color: #fde047;
+      color: #ffffff;
+    }
+
+    .timer-badge {
+      background: #334155;
+      color: #fef08a;
+      font-family: monospace;
+      font-size: 1.1rem;
+    }
+
+    /* メインカード表示領域 */
+    main {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    .card-frame {
+      background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+      color: var(--text-main);
+      width: 92vw;
+      max-width: 1150px;
+      height: 70vh;
+      border-radius: 24px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 0 0 14px var(--card-border);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+      padding: 30px;
+      transition: all 0.2s ease-out;
+    }
+
+    /* 左上五十音バッジ */
+    .char-badge {
+      position: absolute;
+      top: 20px;
+      left: 25px;
+      width: clamp(100px, 14vw, 150px);
+      height: clamp(100px, 14vw, 150px);
+      background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      color: #ffffff;
+      border-radius: 50%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: clamp(3.5rem, 8vw, 6rem);
+      font-weight: 900;
+      box-shadow: 0 8px 20px rgba(220, 38, 38, 0.5);
+      border: 5px solid #ffffff;
+      z-index: 2;
+    }
+
+    /* 札の本文文章 */
+    .phrase-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      width: 100%;
+      text-align: center;
+      padding-left: 60px;
+    }
+
+    .phrase-line {
+      font-size: calc(clamp(2.2rem, 4.8vw, 4.2rem) * var(--font-scale));
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      color: #0f172a;
+      line-height: 1.25;
+      text-shadow: 1px 1px 0px rgba(255,255,255,0.8);
+    }
+
+    /* 伏せ札・画面隠しオーバーレイ */
+    .cover-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #f1f5f9;
+      padding: 40px;
+      text-align: center;
+      z-index: 5;
+    }
+
+    .cover-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+      animation: bounce 2s infinite;
+    }
+
+    .cover-message {
+      font-size: clamp(2rem, 4.5vw, 3.8rem);
+      font-weight: bold;
+      color: #38bdf8;
+      margin-bottom: 12px;
+    }
+
+    .cover-sub {
+      font-size: clamp(1.1rem, 2vw, 1.6rem);
+      color: #94a3b8;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+
+    /* 教員手元用・控えめステータス表示 */
+    .teacher-subtle-note {
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-size: 0.9rem;
+      color: #64748b;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 6px 12px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 6;
+    }
+
+    .teacher-subtle-note.otori-active {
+      color: #b91c1c;
+      background: #fee2e2;
+      border-color: #fca5a5;
+    }
+
+    /* 下部コントローラー */
+    footer {
+      background: #020617;
+      padding: 14px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      border-top: 2px solid #334155;
+      z-index: 20;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    body.is-fullscreen footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(2, 6, 23, 0.95);
+      backdrop-filter: blur(8px);
+      transform: translateY(85%);
+      opacity: 0.2;
+    }
+
+    body.is-fullscreen footer:hover,
+    body.is-fullscreen footer:focus-within {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .btn-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 1.1rem;
+      font-weight: bold;
+      padding: 12px 22px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    .kbd-hint {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+
+    /* ボタンカラーバリエーション */
+    .btn-primary { background: #10b981; color: #ffffff; }
+    .btn-primary:hover { background: #059669; }
+
+    .btn-danger { background: #e11d48; color: #ffffff; }
+    .btn-danger:hover { background: #be123c; }
+
+    .btn-info { background: #0284c7; color: #ffffff; }
+    .btn-info:hover { background: #0369a1; }
+
+    .btn-purple { background: #8b5cf6; color: #ffffff; }
+    .btn-purple:hover { background: #7c3aed; }
+
+    .btn-secondary { background: #475569; color: #ffffff; }
+    .btn-secondary:hover { background: #334155; }
+
+    .btn-sub {
+      font-size: 0.9rem;
+      padding: 6px 14px;
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #475569;
+    }
+    .btn-sub:hover { background: #334155; color: #fff; }
+    .btn-sub.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
+
+    /* モーダルダイアログ */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(4px);
+      justify-content: center;
+      align-items: center;
+      z-index: 100;
+    }
+
+    .modal-box {
+      background: #1e293b;
+      border: 2px solid #475569;
+      border-radius: 20px;
+      width: 90%;
+      max-width: 900px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 25px 50px -12px rgba(0,0,0,0.8);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 16px 24px;
+      background: #0f172a;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #38bdf8;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .search-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .search-input {
+      flex: 1;
+      padding: 10px 16px;
+      font-size: 1.1rem;
+      border-radius: 10px;
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #fff;
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+    }
+
+    .grid-item {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.15s;
+      position: relative;
+    }
+
+    .grid-item:hover {
+      border-color: #38bdf8;
+      background: #1e293b;
+    }
+
+    .grid-item.read {
+      opacity: 0.55;
+      background: #020617;
+    }
+
+    .grid-item.is-pinned {
+      border: 2px solid #eab308;
+      background: #1c1917;
+    }
+
+    .grid-item-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .grid-char {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #f43f5e;
+    }
+
+    .grid-status {
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #334155;
+    }
+
+    .grid-status.read { background: #475569; color: #94a3b8; }
+    .grid-status.unread { background: #10b981; color: #fff; }
+    .grid-status.pinned { background: #ca8a04; color: #fff; }
+
+    .grid-phrase {
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .grid-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .btn-card-action {
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- 上部ヘッダー -->
+  <header>
+    <div class="header-title">
+      <span>🌱 生物育成かるた</span>
+      <small style="color: #94a3b8; font-weight: normal;">(鈴木ver.)</small>
+    </div>
+
+    <div class="badge-group">
+      <div class="badge badge-highlight">
+        残: <span id="count-remaining">46</span> / 46
+      </div>
+      <div class="badge">
+        読了: <span id="count-read">0</span>
+      </div>
+      <div class="badge badge-pin" id="pin-badge-container">
+        📌 最後に設定: <span id="count-pinned">0</span>枚
+      </div>
+      <div class="badge timer-badge" id="timer-display" title="経過時間">
+        ⏱️ 00:00
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 8px;">
+      <button class="btn-sub" onclick="toggleFullscreen()" title="全画面表示 (ショートカット: F)">
+        📺 全画面 <span class="kbd-hint">F</span>
+      </button>
+      <button class="btn-sub" onclick="openShortcutHelp()" title="操作方法">
+        ❓ 使い方
+      </button>
+    </div>
+  </header>
+
+  <!-- メイン表示領域 -->
+  <main id="main-area">
+    <div class="card-frame" id="card-frame">
+
+      <!-- 未開始表示 -->
+      <div id="state-start" style="text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 16px;">🎴</div>
+        <div style="font-size: 2rem; font-weight: bold; color: #475569;">
+          「次の札を引く」または [Enter] でスタート
+        </div>
+      </div>
+
+      <!-- 伏せ札 / 画面隠し（メッセージ画面） -->
+      <div id="state-cover" class="cover-overlay hidden">
+        <div class="cover-icon" id="cover-icon">📢</div>
+        <div class="cover-message" id="cover-msg-text">先生が読んでいるよ！</div>
+        <div class="cover-sub" id="cover-sub-text">（よく聞いて絵札を探そう）</div>
+      </div>
+
+      <!-- かるた読み札本文 -->
+      <div id="state-card" class="phrase-box hidden">
+        <div class="char-badge" id="card-char">あ</div>
+        <div class="phrase-line" id="card-kami">あぶらむし</div>
+        <div class="phrase-line" id="card-naka">しょくぶつのしるを</div>
+        <div class="phrase-line" id="card-shimo">すういやなやつ</div>
+      </div>
+
+      <!-- 教員手元用・ステータス表示 -->
+      <div class="teacher-subtle-note hidden" id="teacher-note">
+        <span id="teacher-note-text">提示中: 札#1【あ】</span>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- 下部操作パネル -->
+  <footer>
+
+    <!-- メイン操作ボタン群 -->
+    <div class="btn-row">
+      <button class="btn-primary" onclick="drawNextCard()" title="次の札をランダムで引く">
+        🎲 次の札を引く <span class="kbd-hint">Enter / Space</span>
+      </button>
+
+      <button class="btn-danger" id="btn-otori" onclick="showOtoriCard()" disabled title="直前に読んだ札を表示 (全画面時も O キーで即起動)">
+        🎭 おとりを表示 <span class="kbd-hint">O</span>
+      </button>
+
+      <button class="btn-info" onclick="toggleReveal()" title="画面の隠し/表示を切替">
+        👁️ 画面隠し / 表示 <span class="kbd-hint">H</span>
+      </button>
+
+      <button class="btn-sub" onclick="speakCurrentCard()" style="font-size: 1.1rem; padding: 12px 18px;" title="現在の札をもう一度読み上げ">
+        🗣️ もう一度読む <span class="kbd-hint">V</span>
+      </button>
+
+      <button class="btn-purple" onclick="openPickerModal()" title="読み札一覧から直接指定・最後設定">
+        📋 一覧から選ぶ / 最後設定 <span class="kbd-hint">L</span>
+      </button>
+
+      <button class="btn-secondary" onclick="goBackPreviousCard()" id="btn-back" disabled title="1つ前の札に戻る">
+        ◀ 前の札 <span class="kbd-hint">B</span>
+      </button>
+
+      <button class="btn-secondary" onclick="confirmReset()" title="最初からやり直す">
+        🔄 リセット <span class="kbd-hint">R</span>
+      </button>
+    </div>
+
+    <!-- サブ機能・オプション設定 -->
+    <div class="btn-row" style="font-size: 0.9rem; color: #94a3b8; justify-content: space-between;">
+
+      <!-- 画面隠し時のメッセージ切り替えクイックボタン -->
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <span style="font-weight: bold; color: #cbd5e1;">隠しメッセージ:</span>
+        <button class="btn-sub btn-cover-msg active" id="btn-cover-read" onclick="setCoverMessage('read', this)">📢 読んでいるよ <span class="kbd-hint">1</span></button>
+        <button class="btn-sub btn-cover-msg" id="btn-cover-explain" onclick="setCoverMessage('explain', this)">💬 先生解説中 <span class="kbd-hint">2</span></button>
+        <button class="btn-sub btn-cover-msg" id="btn-cover-next" onclick="setCoverMessage('next', this)">🚀 次の札行きます <span class="kbd-hint">3</span></button>
+        <button class="btn-sub btn-cover-msg" id="btn-cover-hear" onclick="setCoverMessage('hear', this)">❓ 聞こえなかった？ <span class="kbd-hint">4</span></button>
+      </div>
+
+      <!-- 教員用オプション設定 -->
+      <div style="display: flex; gap: 16px; align-items: center;">
+        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; color: #38bdf8; font-weight: bold;">
+          <input type="checkbox" id="chk-speech" checked>
+          <span>🔊 自動音読 (読み上げ)</span>
+        </label>
+
+        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="chk-auto-hide">
+          <span>引いた時に自動で隠す</span>
+        </label>
+
+        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+          <input type="checkbox" id="chk-sound" checked>
+          <span>効果音</span>
+        </label>
+
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <span>文字:</span>
+          <button class="btn-sub" onclick="changeFontSize(0.1)">＋</button>
+          <button class="btn-sub" onclick="changeFontSize(-0.1)">－</button>
+        </div>
+      </div>
+
+    </div>
+
+  </footer>
+
+  <!-- モーダル: 読み札一覧・指名選択・最後に読む設定 -->
+  <div class="modal-backdrop" id="modal-picker">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">📋 読み札一覧（指名出し・最後に読む設定）</div>
+        <button class="btn-secondary" onclick="closePickerModal()">✕ 閉じる</button>
+      </div>
+      <div class="modal-body">
+        <div class="search-bar">
+          <input type="text" class="search-input" id="search-input" placeholder="五十音やキーワードで検索（例: あ, 肥料, 牛）..." oninput="filterCardGrid()">
+          <button class="btn-sub active" id="btn-filter-all" onclick="setModalFilter('all')">すべて</button>
+          <button class="btn-sub" id="btn-filter-unread" onclick="setModalFilter('unread')">未読のみ</button>
+          <button class="btn-sub" id="btn-filter-pinned" onclick="setModalFilter('pinned')">📌 最後に読む指定</button>
+        </div>
+        <div class="card-grid" id="card-grid-container">
+          <!-- JSで動的生成 -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- モーダル: ショートカットキーヘルプ -->
+  <div class="modal-backdrop" id="modal-help">
+    <div class="modal-box" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">⌨️ キーボード＆操作ガイド</div>
+        <button class="btn-secondary" onclick="closeShortcutHelp()">✕ 閉じる</button>
+      </div>
+      <div class="modal-body" style="line-height: 1.8;">
+        <p style="margin-bottom: 12px; color: #38bdf8; font-weight: bold;">
+          プレゼン用リモコン（PowerPointリモコン）や全画面表示中もすべてのショートカットキーが有効です。
+        </p>
+        <table style="width: 100%; text-align: left; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid #334155;"><th style="padding: 8px;">操作</th><th style="padding: 8px;">キー</th></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">次の札を引く</td><td style="padding: 8px;"><span class="kbd-hint">Enter</span> <span class="kbd-hint">Space</span> <span class="kbd-hint">PageDown</span> <span class="kbd-hint">↓</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">おとり札表示</td><td style="padding: 8px;"><span class="kbd-hint">O</span> （全画面中も有効）</td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">画面隠し / 表示</td><td style="padding: 8px;"><span class="kbd-hint">H</span> または <span class="kbd-hint">M</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">音声で読む（手動）</td><td style="padding: 8px;"><span class="kbd-hint">V</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">一覧から指名/最後設定</td><td style="padding: 8px;"><span class="kbd-hint">L</span> または <span class="kbd-hint">S</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">1つ前の札に戻る</td><td style="padding: 8px;"><span class="kbd-hint">B</span> または <span class="kbd-hint">PageUp</span> <span class="kbd-hint">↑</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">全画面切替</td><td style="padding: 8px;"><span class="kbd-hint">F</span> または <span class="kbd-hint">F11</span></td></tr>
+          <tr style="border-bottom: 1px solid #334155;"><td style="padding: 8px;">隠しメッセージ変更</td><td style="padding: 8px;"><span class="kbd-hint">1</span> <span class="kbd-hint">2</span> <span class="kbd-hint">3</span> <span class="kbd-hint">4</span></td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 全46件の読み札データ
+    const karutaData = [
+      { id: 1, char: "あ", kami: "あぶらむし", naka: "しょくぶつのしるを", shimo: "すういやなやつ", yomi: "あぶらむし。しょくぶつのしるを。すういやなやつ。" },
+      { id: 2, char: "い", kami: "いちにちに", naka: "６０～１００Lの水", shimo: "乳牛にはひつよう", yomi: "いちにちに。ろくじゅうからひゃくりっとるのみず。にゅうぎゅうにはひつよう。" },
+      { id: 3, char: "う", kami: "うどんこ病", naka: "乾燥状況で", shimo: "被害拡大・・・", yomi: "うどんこびょう。かんそうじょうきょうで。ひがいかくだい。" },
+      { id: 4, char: "え", kami: "えんどうまめの", naka: "しんめは", shimo: "とうみょうのこと", yomi: "えんどうまめの。しんめは。とうみょうのこと。" },
+      { id: 5, char: "お", kami: "おいごえは", naka: "もとごえのあとに", shimo: "ついかするひりょう", yomi: "おいごえは。もとごえのあとに。ついかするひりょう。" },
+      { id: 6, char: "か", kami: "かりうむけつぼう", naka: "葉の周辺が", shimo: "黄色になる", yomi: "かりうむけつぼう。はのしゅうへんが。きいろになる。" },
+      { id: 7, char: "き", kami: "きしょうてき", naka: "よういんはこうすいりょう", shimo: "にっしゃりょうなど", yomi: "きしょうてき。よういんはこうすいりょう。にっしゃりょうなど。" },
+      { id: 8, char: "く", kami: "くじょしていこう", naka: "植物にとって", shimo: "ゆうがいな虫を", yomi: "くじょしていこう。しょくぶつにとって。ゆうがいなむしを。" },
+      { id: 9, char: "け", kami: "けんこうな牛を", naka: "そだてるために", shimo: "環境をよくしよう", yomi: "けんこうなうしを。そだてるために。かんきょうをよくしよう。" },
+      { id: 10, char: "ご", kami: "ご～６年", naka: "乳牛を飼育した後", shimo: "肉用で出荷", yomi: "ごからろくねん。にゅうぎゅうをしいくしたあと。にくようにしゅっか。" },
+      { id: 11, char: "さ", kami: "さいてきな", naka: "かんきょうをようい", shimo: "かちくのため", yomi: "さいてきな。かんきょうをようい。かちくのため。" },
+      { id: 12, char: "じ", kami: "じんこうてきに", naka: "つくりだすよ", shimo: "品種改良", yomi: "じんこうてきに。つくりだすよ。ひんしゅかいりょう。" },
+      { id: 13, char: "す", kami: "すじまきは", naka: "ふつうのおおきさの", shimo: "たねにする", yomi: "すじまきは。ふつうのおおきさの。たねにする。" },
+      { id: 14, char: "せ", kami: "せいぶつてき", naka: "よういんはとりや", shimo: "ざっそうなど", yomi: "せいぶつてき。よういんはとりや。ざっそうなど。" },
+      { id: 15, char: "そ", kami: "そだてる", naka: "漁業の量は", shimo: "とる漁業と同じくらい", yomi: "そだてる。ぎょぎょうのりょうは。とるぎょぎょうとおなじくらい。" },
+      { id: 16, char: "だ", kami: "だんりゅう", naka: "こうぞうはすきまが", shimo: "おおいから良い", yomi: "だんりゅう。こうぞうはすきまが。おおいからいい。" },
+      { id: 17, char: "ち", kami: "ちっそのけつぼう", naka: "せいいくおとろえ", shimo: "葉は黄緑色に", yomi: "ちっそのけつぼう。せいいくおとろえ。ははきみどりいろに。" },
+      { id: 18, char: "つ", kami: "つゆの時期に", naka: "発生しやすい", shimo: "植物の病気", yomi: "つゆのじきに。はっせいしやすい。しょくぶつのびょうき。" },
+      { id: 19, char: "て", kami: "てんまきは", naka: "おおきいたねに", shimo: "しようする", yomi: "てんまきは。おおきいたねに。しようする。" },
+      { id: 20, char: "ど", kami: "どじょうてき", naka: "よういんはみずや", shimo: "ようぶんなど", yomi: "どじょうてき。よういんはみずや。ようぶんなど。" },
+      { id: 21, char: "な", kami: "なえのよさは", naka: "葉と茎と根で", shimo: "みわける", yomi: "なえのよさは。はと くきと ねで。みわける。" },
+      { id: 22, char: "に", kami: "にんげんの", naka: "せいかつこうじょう", shimo: "品種改良", yomi: "にんげんの。せいかつこうじょう。ひんしゅかいりょう。" },
+      { id: 23, char: "ぬ", kami: "ぬくもりたいせつ", naka: "しょくぶつには", shimo: "にっこうを", yomi: "ぬくもりたいせつ。しょくぶつには。にっこうを。" },
+      { id: 24, char: "ね", kami: "ねのいろがしろく", naka: "葉や茎が太い", shimo: "よいなえです", yomi: "ねのいろがしろく。はや くきが ふとい。よいなえです。" },
+      { id: 25, char: "の", kami: "のうやくは", naka: "のうやくしようきじゅん", shimo: "まもろう", yomi: "のうやくは。のうやくしようきじゅん。まもろう。" },
+      { id: 26, char: "ば", kami: "ばらまきは", naka: "こまかいたねに", shimo: "しようする", yomi: "ばらまきは。こまかいたねに。しようする。" },
+      { id: 27, char: "ひ", kami: "ひりょうのさんようそ", naka: "カリウム・リン", shimo: "窒素", yomi: "ひりょうのさんようそ。かりうむ、りん。ちっそ。" },
+      { id: 28, char: "ぶ", kami: "ぶりは５５％", naka: "ノリやカキ類は１００％", shimo: "養殖です", yomi: "ぶりはごじゅうごぱーせんと。のりやかきるいはひゃくぱーせんと。ようしょくです。" },
+      { id: 29, char: "へ", kami: "へいさてきに", naka: "そだてる方法", shimo: "植物工場", yomi: "へいさてきに。そだてるほうほう。しょくぶつこうじょう。" },
+      { id: 30, char: "ほ", kami: "ほうふに", naka: "ビタミンあるよ", shimo: "とうみょう", yomi: "ほうふに。びたみんあるよ。とうみょう。" },
+      { id: 31, char: "ま", kami: "まびきは", naka: "なえをへらす", shimo: "さぎょうのこと", yomi: "まびきは。なえをへらす。さぎょうのこと。" },
+      { id: 32, char: "み", kami: "みずはけ", naka: "悪い", shimo: "単粒構造", yomi: "みずはけ。わるい。たんりゅうこうぞう。" },
+      { id: 33, char: "む", kami: "むりして生で", naka: "たべないで", shimo: "とうみょう", yomi: "むりしてなまで。たべないで。とうみょう。" },
+      { id: 34, char: "め", kami: "めすのにゅうぎゅう", naka: "しゅっせいご", shimo: "2年で子を産む", yomi: "めすのにゅうぎゅう。しゅっせいご。にねんでこをうむ。" },
+      { id: 35, char: "も", kami: "もとごえは", naka: "じぜんにいれる", shimo: "ひりょうのこと", yomi: "もとごえは。じぜんにいれる。ひりょうのこと。" },
+      { id: 36, char: "や", kami: "やく十か月", naka: "さくにゅうをする", shimo: "にゅうぎゅう", yomi: "やくじゅっかいげつ。さくにゅうをする。にゅうぎゅう。" },
+      { id: 37, char: "ゆ", kami: "ゆうがいな", naka: "びょうがいちゅうの", shimo: "たいさくしっかり", yomi: "ゆうがいな。びょうがいちゅうの。たいさくしっかり。" },
+      { id: 38, char: "よ", kami: "ようしょくは", naka: "にんげんがそだてる", shimo: "すいさんせいぶつを", yomi: "ようしょくは。にんげんがそだてる。すいさんせいぶつを。" },
+      { id: 39, char: "ら", kami: "らくのう家", naka: "のおかげで牛乳", shimo: "飲めている", yomi: "らくのうか。のおかげでぎゅうにゅう。のめている。" },
+      { id: 40, char: "り", kami: "りんのけつぼう", naka: "下葉が", shimo: "青紫色に", yomi: "りんのけつぼう。したばが。あおむらさきいろに。" },
+      { id: 41, char: "る", kami: "るーるをまもって", naka: "のうやくつかおう", shimo: "のうやくしようきじゅん", yomi: "るーるをまもって。のうやくつかおう。のうやくしようきじゅん。" },
+      { id: 42, char: "れ", kami: "れんさくしょうがい", naka: "輪作で", shimo: "回避しよう！", yomi: "れんさくしょうがい。りんさくで。かいひしよう。" },
+      { id: 43, char: "ろ", kami: "ろうどう者", naka: "若い人がほしい", shimo: "農・畜産・漁業", yomi: "ろうどうしゃ。わかいひとがほしい。のう、ちくさん、ぎょぎょう。" },
+      { id: 44, char: "わ", kami: "わるくなる", naka: "いろつきやつやが", shimo: "ハダニのせいで", yomi: "わるくなる。いろつきやつやが。はだにのせいで。" },
+      { id: 45, char: "を", kami: "病害虫を", naka: "適切な方法で", shimo: "防除しよう", yomi: "びょうがいちゅうを。てきせつなほうほうで。ぼうじょしよう。" },
+      { id: 46, char: "ん", kami: "うんちは", naka: "ひりょうになる", shimo: "すごいやつ", yomi: "うんちは。ひりょうになる。すごいやつ。" }
+    ];
+
+    const coverMessages = {
+      read: { icon: "📢", msg: "先生が読んでいるよ！", sub: "（よく聞いて絵札を探そう）" },
+      explain: { icon: "💬", msg: "先生が解説中！", sub: "（静かに話を聞こう）" },
+      next: { icon: "🚀", msg: "準備はいい？ 次の札へ！", sub: "（手を膝において待機）" },
+      hear: { icon: "❓", msg: "聞こえなかった？", sub: "（先生がもう一度読むよ）" }
+    };
+
+    let deck = [];
+    let history = [];
+    let pinnedIds = new Set();
+    let isRevealed = true;
+    let isOtoriMode = false;
+    let currentMessageKey = 'read';
+    let currentFontScale = 1.0;
+    let timerSeconds = 0;
+    let timerInterval = null;
+    let modalFilter = 'all';
+    let japaneseVoice = null;
+
+    // 音声ボイスのロード
+    function loadVoices() {
+      if (!('speechSynthesis' in window)) return;
+      const voices = window.speechSynthesis.getVoices();
+      japaneseVoice = voices.find(v => v.lang === 'ja-JP' || v.lang.includes('ja')) || null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+      loadVoices();
+    }
+
+    // 音声読み上げ処理
+    function speakCurrentCard() {
+      if (!('speechSynthesis' in window)) return;
+
+      window.speechSynthesis.cancel();
+
+      if (history.length === 0) return;
+      const card = isOtoriMode ? history[history.length - 2] : history[history.length - 1];
+
+      const textToSpeak = card.yomi || `${card.kami}。${card.naka}。${card.shimo}。`;
+      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.lang = 'ja-JP';
+      if (japaneseVoice) utterance.voice = japaneseVoice;
+      utterance.rate = 0.88;
+      utterance.pitch = 1.0;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function autoSpeakIfEnabled() {
+      if (document.getElementById('chk-speech').checked) {
+        setTimeout(() => {
+          speakCurrentCard();
+        }, 250);
+      }
+    }
+
+    // 効果音
+    function playSound(type) {
+      if (!document.getElementById('chk-sound').checked) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === 'draw') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(1046.50, ctx.currentTime + 0.15);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.2);
+        } else if (type === 'otori') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(300, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.25);
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.25);
+        }
+      } catch (e) {}
+    }
+
+    // タイマー管理
+    function startTimer() {
+      resetTimer();
+      timerInterval = setInterval(() => {
+        timerSeconds++;
+        const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const s = String(timerSeconds % 60).padStart(2, '0');
+        document.getElementById('timer-display').innerText = `⏱️ ${m}:${s}`;
+      }, 1000);
+    }
+
+    function resetTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerSeconds = 0;
+      document.getElementById('timer-display').innerText = `⏱️ 00:00`;
+    }
+
+    // 山札の構築
+    function generateDeck() {
+      const normalCards = [];
+      const pinnedCards = [];
+
+      karutaData.forEach(card => {
+        if (pinnedIds.has(card.id)) {
+          pinnedCards.push(card);
+        } else {
+          normalCards.push(card);
+        }
+      });
+
+      normalCards.sort(() => Math.random() - 0.5);
+      pinnedCards.sort(() => Math.random() - 0.5);
+
+      deck = [...pinnedCards, ...normalCards];
+    }
+
+    // 初期化
+    function initGame() {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      generateDeck();
+      history = [];
+      isOtoriMode = false;
+      isRevealed = true;
+
+      document.getElementById('state-start').classList.remove('hidden');
+      document.getElementById('state-cover').classList.add('hidden');
+      document.getElementById('state-card').classList.add('hidden');
+      document.getElementById('teacher-note').classList.add('hidden');
+
+      document.getElementById('btn-otori').disabled = true;
+      document.getElementById('btn-back').disabled = true;
+
+      resetTimer();
+      updateHeaderCounts();
+    }
+
+    function confirmReset() {
+      if (confirm("かるたを最初からやり直しますか？")) {
+        initGame();
+      }
+    }
+
+    function updateHeaderCounts() {
+      document.getElementById('count-remaining').innerText = deck.length;
+      document.getElementById('count-read').innerText = history.length;
+      document.getElementById('count-pinned').innerText = pinnedIds.size;
+    }
+
+    // 「最後に読む」ピンのトグル切り替え
+    function togglePin(cardId, event) {
+      if (event) event.stopPropagation();
+
+      if (pinnedIds.has(cardId)) {
+        pinnedIds.delete(cardId);
+      } else {
+        pinnedIds.add(cardId);
+      }
+
+      const readIds = new Set(history.map(h => h.id));
+      const unreadCards = karutaData.filter(c => !readIds.has(c.id));
+
+      const unreadNormal = unreadCards.filter(c => !pinnedIds.has(c.id)).sort(() => Math.random() - 0.5);
+      const unreadPinned = unreadCards.filter(c => pinnedIds.has(c.id)).sort(() => Math.random() - 0.5);
+
+      deck = [...unreadPinned, ...unreadNormal];
+
+      updateHeaderCounts();
+      renderCardGrid();
+    }
+
+    // 次の札を引く
+    function drawNextCard() {
+      if (deck.length === 0) {
+        alert("🎉 すべての読み札を読み終えました！");
+        return;
+      }
+
+      const nextCard = deck.pop();
+      history.push(nextCard);
+      isOtoriMode = false;
+
+      const autoHide = document.getElementById('chk-auto-hide').checked;
+      isRevealed = !autoHide;
+
+      renderCurrentCard();
+      playSound('draw');
+      autoSpeakIfEnabled();
+      startTimer();
+      updateHeaderCounts();
+    }
+
+    // おとり札表示
+    function showOtoriCard() {
+      if (history.length < 2) return;
+      isOtoriMode = true;
+      isRevealed = true;
+
+      renderCurrentCard();
+      playSound('otori');
+      autoSpeakIfEnabled();
+    }
+
+    // 1つ前の札に戻る
+    function goBackPreviousCard() {
+      if (history.length === 0) return;
+      const last = history.pop();
+      deck.push(last);
+      isOtoriMode = false;
+      isRevealed = true;
+
+      if (history.length > 0) {
+        renderCurrentCard();
+        autoSpeakIfEnabled();
+      } else {
+        initGame();
+      }
+      updateHeaderCounts();
+    }
+
+    // 画面隠し・表示切替
+    function toggleReveal() {
+      if (history.length === 0) return;
+      isRevealed = !isRevealed;
+      renderCurrentCard();
+    }
+
+    // カード描画
+    function renderCurrentCard() {
+      if (history.length === 0) return;
+
+      const card = isOtoriMode ? history[history.length - 2] : history[history.length - 1];
+
+      document.getElementById('state-start').classList.add('hidden');
+
+      document.getElementById('card-char').innerText = card.char;
+      document.getElementById('card-kami').innerText = card.kami;
+      document.getElementById('card-naka').innerText = card.naka;
+      document.getElementById('card-shimo').innerText = card.shimo;
+
+      if (isRevealed) {
+        document.getElementById('state-card').classList.remove('hidden');
+        document.getElementById('state-cover').classList.add('hidden');
+      } else {
+        document.getElementById('state-card').classList.add('hidden');
+        document.getElementById('state-cover').classList.remove('hidden');
+      }
+
+      const teacherNoteEl = document.getElementById('teacher-note');
+      const teacherTextEl = document.getElementById('teacher-note-text');
+      teacherNoteEl.classList.remove('hidden');
+
+      const isPinned = pinnedIds.has(card.id) ? " 📌(最後指定札)" : "";
+
+      if (isOtoriMode) {
+        teacherNoteEl.classList.add('otori-active');
+        teacherTextEl.innerText = `⚠️【おとり表示中】#${card.id}【${card.char}】${card.kami}${isPinned}`;
+      } else {
+        teacherNoteEl.classList.remove('otori-active');
+        teacherTextEl.innerText = `提示中: #${card.id}【${card.char}】${card.kami}${isPinned}`;
+      }
+
+      document.getElementById('btn-otori').disabled = history.length < 2;
+      document.getElementById('btn-back').disabled = history.length === 0;
+    }
+
+    // 隠しメッセージ切り替え
+    function setCoverMessage(key, btnEl) {
+      currentMessageKey = key;
+      const data = coverMessages[key];
+      document.getElementById('cover-icon').innerText = data.icon;
+      document.getElementById('cover-msg-text').innerText = data.msg;
+      document.getElementById('cover-sub-text').innerText = data.sub;
+
+      document.querySelectorAll('.btn-cover-msg').forEach(b => b.classList.remove('active'));
+      if (btnEl) btnEl.classList.add('active');
+    }
+
+    function changeFontSize(delta) {
+      currentFontScale = Math.max(0.7, Math.min(1.5, currentFontScale + delta));
+      document.documentElement.style.setProperty('--font-scale', currentFontScale);
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          document.body.classList.add('is-fullscreen');
+        }).catch(err => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().then(() => {
+            document.body.classList.remove('is-fullscreen');
+          });
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        document.body.classList.remove('is-fullscreen');
+      }
+    });
+
+    // モーダル機能
+    function openPickerModal() {
+      document.getElementById('modal-picker').style.display = 'flex';
+      renderCardGrid();
+      document.getElementById('search-input').focus();
+    }
+
+    function closePickerModal() {
+      document.getElementById('modal-picker').style.display = 'none';
+    }
+
+    function setModalFilter(filter) {
+      modalFilter = filter;
+      document.getElementById('btn-filter-all').classList.toggle('active', filter === 'all');
+      document.getElementById('btn-filter-unread').classList.toggle('active', filter === 'unread');
+      document.getElementById('btn-filter-pinned').classList.toggle('active', filter === 'pinned');
+      renderCardGrid();
+    }
+
+    function filterCardGrid() {
+      renderCardGrid();
+    }
+
+    function renderCardGrid() {
+      const container = document.getElementById('card-grid-container');
+      const query = document.getElementById('search-input').value.trim().toLowerCase();
+      container.innerHTML = '';
+
+      karutaData.forEach(card => {
+        const isRead = history.some(h => h.id === card.id);
+        const isPinned = pinnedIds.has(card.id);
+        
+        if (modalFilter === 'unread' && isRead) return;
+        if (modalFilter === 'pinned' && !isPinned) return;
+
+        if (query) {
+          const match = card.char.includes(query) || 
+                        card.kami.includes(query) || 
+                        card.naka.includes(query) || 
+                        card.shimo.includes(query);
+          if (!match) return;
+        }
+
+        const item = document.createElement('div');
+        item.className = `grid-item ${isRead ? 'read' : ''} ${isPinned ? 'is-pinned' : ''}`;
+
+        let statusBadgeHtml = `<span class="grid-status ${isRead ? 'read' : 'unread'}">${isRead ? '読了' : '未読'}</span>`;
+        if (isPinned) {
+          statusBadgeHtml += ` <span class="grid-status pinned">📌 最後に読む</span>`;
+        }
+
+        item.innerHTML = `
+          <div class="grid-item-header">
+            <span class="grid-char">【${card.char}】</span>
+            <div>${statusBadgeHtml}</div>
+          </div>
+          <div class="grid-phrase" onclick="selectCardFromPicker(${card.id})">${card.kami} ${card.naka}</div>
+          <div class="grid-actions">
+            <button class="btn-sub btn-card-action" onclick="selectCardFromPicker(${card.id})" title="この札を画面に出す">
+              🎯 今すぐ出す
+            </button>
+            <button class="btn-sub btn-card-action ${isPinned ? 'active' : ''}" onclick="togglePin(${card.id}, event)" title="この札を一番最後に回す">
+              ${isPinned ? '📌 設定解除' : '📌 最後に読む'}
+            </button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    function selectCardFromPicker(cardId) {
+      const card = karutaData.find(c => c.id === cardId);
+      if (!card) return;
+
+      const deckIdx = deck.findIndex(c => c.id === card.id);
+      if (deckIdx !== -1) {
+        deck.splice(deckIdx, 1);
+      }
+
+      history.push(card);
+      isOtoriMode = false;
+      isRevealed = true;
+
+      renderCurrentCard();
+      closePickerModal();
+      updateHeaderCounts();
+      playSound('draw');
+      autoSpeakIfEnabled();
+      startTimer();
+    }
+
+    function openShortcutHelp() {
+      document.getElementById('modal-help').style.display = 'flex';
+    }
+    function closeShortcutHelp() {
+      document.getElementById('modal-help').style.display = 'none';
+    }
+
+    // キーボードショートカット
+    document.addEventListener('keydown', (e) => {
+      const isPickerOpen = document.getElementById('modal-picker').style.display === 'flex';
+      const isHelpOpen = document.getElementById('modal-help').style.display === 'flex';
+
+      // モーダル表示中の処理
+      if (isPickerOpen || isHelpOpen) {
+        if (e.key === 'Escape') {
+          closePickerModal();
+          closeShortcutHelp();
+        }
+        return;
+      }
+
+      // 入力フォームにフォーカス中も無効化
+      if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+
+      const key = e.key.toLowerCase();
+      const code = e.code;
+
+      // 「次の札を引く」 (Enter, Space, PageDown, DownArrow)
+      if (e.key === 'Enter' || e.key === ' ' || e.key === 'PageDown' || e.key === 'ArrowDown' || code === 'Space' || code === 'Enter') {
+        e.preventDefault();
+        drawNextCard();
+      }
+      // 「おとり札を表示」 (Oキー, KeyO, 全角「お」「オ」対応)
+      else if (key === 'o' || code === 'KeyO' || e.key === 'お' || e.key === 'オ') {
+        e.preventDefault();
+        showOtoriCard();
+      }
+      // 「画面隠し / 表示切替」 (H, Mキー, KeyH, KeyM, 全角「は」「ま」)
+      else if (key === 'h' || key === 'm' || code === 'KeyH' || code === 'KeyM' || e.key === 'は' || e.key === 'ま') {
+        e.preventDefault();
+        toggleReveal();
+      }
+      // 「もう一度読む (音声)」 (Vキー, KeyV, 全角「ぶ」)
+      else if (key === 'v' || code === 'KeyV' || e.key === 'ぶ') {
+        e.preventDefault();
+        speakCurrentCard();
+      }
+      // 「一覧 / 指名選択」 (L, Sキー, KeyL, KeyS)
+      else if (key === 'l' || key === 's' || code === 'KeyL' || code === 'KeyS') {
+        e.preventDefault();
+        openPickerModal();
+      }
+      // 「1つ前の札に戻る」 (Bキー, KeyB, PageUp, UpArrow)
+      else if (key === 'b' || code === 'KeyB' || e.key === 'PageUp' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goBackPreviousCard();
+      }
+      // 「全画面切替」 (Fキー, KeyF, F11)
+      else if (key === 'f' || code === 'KeyF' || e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+      // 「リセット」 (Rキー, KeyR)
+      else if (key === 'r' || code === 'KeyR') {
+        e.preventDefault();
+        confirmReset();
+      }
+      // 隠しメッセージ切り替え (1, 2, 3, 4, Numpad1-4)
+      else if (key === '1' || code === 'Digit1' || code === 'Numpad1') {
+        setCoverMessage('read', document.getElementById('btn-cover-read'));
+      } else if (key === '2' || code === 'Digit2' || code === 'Numpad2') {
+        setCoverMessage('explain', document.getElementById('btn-cover-explain'));
+      } else if (key === '3' || code === 'Digit3' || code === 'Numpad3') {
+        setCoverMessage('next', document.getElementById('btn-cover-next'));
+      } else if (key === '4' || code === 'Digit4' || code === 'Numpad4') {
+        setCoverMessage('hear', document.getElementById('btn-cover-hear'));
+      }
+    });
+
+    initGame();
+  </script>
+</body>
+</html>
